@@ -1,0 +1,15 @@
+{
+  "name": "danistan-network-backend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cors": "latest",
+    "express": "latest"
+  }
+}
