@@ -3,13 +3,17 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "seed:demo": "node scripts/seed-demo-student.js"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
-    "cors": "latest",
-    "express": "latest"
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "mysql2": "^3.11.0"
   }
 }

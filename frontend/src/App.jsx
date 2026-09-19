@@ -11,7 +11,7 @@ export function Logo() { return <button className="logo" onClick={()=>go('/')}><
 export default function App() {
   const [path,setPath]=useState(window.location.pathname); const [session,setSession]=useState(getSession()); const [publicData,setPublicData]=useState(null); const [menu,setMenu]=useState(false);
   useEffect(()=>{const listener=()=>setPath(window.location.pathname);window.addEventListener('popstate',listener);api('/api/public').then(setPublicData).catch(()=>{});return()=>window.removeEventListener('popstate',listener);},[]);
-  const login=value=>{saveSession(value);setSession(value);go(value.role==='admin'?'/admin':'/student');};
+  const login=value=>{const next=value&&!value.role?{...value,role:value.admin?'admin':'student'}:value;saveSession(next);setSession(next);go(next.role==='admin'?'/admin':'/student');};
   const logout=()=>{saveSession(null);setSession(null);go('/');};
   if(path.startsWith('/student')) return session?.role==='student'?<StudentPortal session={session} setSession={value=>{saveSession(value);setSession(value);}} onLogout={logout}/>:<LoginPage onLogin={login}/>;
   if(path==='/admin'||path.startsWith('/admin/portal')) return session?.role==='admin'?<AdminPortal onLogout={logout}/>:<AdminLoginPage onLogin={login}/>;

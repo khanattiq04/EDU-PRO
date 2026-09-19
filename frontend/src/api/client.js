@@ -1,7 +1,12 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 export function getSession() {
-  try { return JSON.parse(localStorage.getItem('danistan_session') || 'null'); } catch { return null; }
+  try {
+    const session = JSON.parse(localStorage.getItem('danistan_session') || 'null');
+    if (!session) return null;
+    if (!session.role) session.role = session.admin ? 'admin' : 'student';
+    return session;
+  } catch { return null; }
 }
 
 export function saveSession(session) {
