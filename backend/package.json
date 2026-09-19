@@ -4,12 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "seed:demo": "node scripts/seed-demo-student.js"
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "seed:demo": "node --env-file-if-exists=.env scripts/seed-demo-student.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
