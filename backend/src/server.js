@@ -10,8 +10,22 @@ import adminRoutes from './routes/admin.js';
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(value => value.trim()).filter(Boolean);
-app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : {}));
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map(value => value.trim())
+  .filter(Boolean)
+  .map(value => new URL(value).origin);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || !allowedOrigins.length) return callback(null, true);
+    try {
+      return callback(null, allowedOrigins.includes(new URL(origin).origin));
+    } catch (error) {
+      return callback(error);
+    }
+  },
+  optionsSuccessStatus: 204
+}));
 app.use((_req, res, next) => {
   res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   next();
