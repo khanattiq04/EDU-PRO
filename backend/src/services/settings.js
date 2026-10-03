@@ -6,7 +6,12 @@ const defaults = {
   maintenance_mode: 'false',
   books_distributed: '4200',
   schools_visited: '38',
-  about_text: 'Learning that travels further. Supporting students across Pakistan.'
+  plan_pricing: '[{"months":1,"amount":200},{"months":3,"amount":500},{"months":6,"amount":1000},{"months":12,"amount":2000}]',
+  certification_passing_percentage: '70',
+  certification_min_courses: '2',
+  about_text: 'Learning that travels further. Supporting students across Pakistan.',
+  introduction_text: 'Danistan Network connects ambitious students with structured learning and fair competition.',
+  mission_text: 'We make quality learning, opportunity, and community accessible to every student.'
 };
 
 export async function ensureDefaultSettings() {

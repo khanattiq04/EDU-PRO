@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { assertConnection, closePool } from './db.js';
+import { assertConnection, closePool, ensureAcademicOptions, ensureContentFeatures, ensureHomepageContent, ensureQuizFeatures, ensureStudentSessions } from './db.js';
 import { ensureDefaultSettings } from './services/settings.js';
 import publicRoutes from './routes/public.js';
 import authRoutes from './routes/auth.js';
@@ -12,7 +12,11 @@ const app = express();
 
 const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(value => value.trim()).filter(Boolean);
 app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : {}));
-app.use(express.json({ limit: '2mb' }));
+app.use((_req, res, next) => {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  next();
+});
+app.use(express.json({ limit: '35mb' }));
 
 app.use('/api', publicRoutes);
 app.use('/api', authRoutes);
@@ -32,6 +36,11 @@ const port = Number(process.env.PORT || 4000);
 async function start() {
   try {
     await assertConnection();
+    await ensureStudentSessions();
+    await ensureHomepageContent();
+    await ensureAcademicOptions();
+    await ensureQuizFeatures();
+    await ensureContentFeatures();
     await ensureDefaultSettings();
   } catch (error) {
     console.error('Database connection failed. Check DB_HOST, DB_PORT, DB_USER, DB_PASSWORD and DB_NAME, and make sure database/schema.sql has been imported.');

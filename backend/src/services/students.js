@@ -37,6 +37,7 @@ export async function serializeStudent(row) {
     city: row.city,
     tehsil: row.tehsil,
     schoolName: row.school_name,
+    schoolApprovalStatus: row.school_approval_status || 'Approved',
     levelProfile: parseProfile(row),
     assignedPaper: row.assigned_paper,
     registrationNumber: row.registration_number,
