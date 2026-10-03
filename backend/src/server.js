@@ -57,7 +57,7 @@ async function start() {
     await ensureContentFeatures();
     await ensureDefaultSettings();
   } catch (error) {
-    console.error('Database connection failed. Check DB_HOST, DB_PORT, DB_USER, DB_PASSWORD and DB_NAME, and make sure database/schema.sql has been imported.');
+    console.error('Database connection failed. Check DB_HOST, DB_PORT, DB_USER, DB_PASSWORD and DB_NAME, and make sure database/import-all.sql has been imported.');
     console.error(error.message);
     process.exit(1);
   }

@@ -19,7 +19,8 @@ async function select(sql, params = []) {
   return rows;
 }
 
-export { select as all };
+const all = select;
+export { all };
 
 export async function one(sql, params = []) {
   const rows = await select(sql, params);
