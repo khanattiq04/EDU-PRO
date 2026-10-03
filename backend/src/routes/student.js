@@ -103,7 +103,7 @@ router.get('/content', async (req, res, next) => {
        FROM content c LEFT JOIN content parent ON parent.id = c.related_content_id
        WHERE (c.level IS NULL OR c.level = '' OR c.level = ?)
          AND (c.stream IS NULL OR c.stream = '' OR c.stream = ?)
-       ORDER BY month_key DESC, id DESC`,
+       ORDER BY c.month_key DESC, c.id DESC`,
       [student.id, student.id, now(), now(), student.levelProfile.level, student.levelProfile.stream]
     );
     res.json(rows);
