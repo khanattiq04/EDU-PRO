@@ -1,0 +1,12 @@
+/* Dashboard home: this month's quiz registration status box. */
+.student-registration-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;background:#fff;border:1px solid var(--app-line);border-radius:10px}
+.student-registration-summary strong{font-family:'Space Grotesk',Arial,sans-serif;font-size:16px;color:var(--app-navy)}
+.quiz-status-box{display:flex;justify-content:space-between;align-items:center;gap:22px;flex-wrap:wrap;background:#fff;border:1px solid var(--app-line);border-radius:14px;padding:22px 24px;margin:22px 0}
+.quiz-status-box.registered{background:#eef7ef;border-color:#cfe6d2}
+.quiz-status-head{display:flex;flex-direction:column;gap:7px;min-width:0}
+.quiz-status-box h2{font-size:22px;margin:0}
+.quiz-status-box.registered h2{color:#2f6b3a}
+.quiz-status-box p{color:var(--app-muted);margin:0;max-width:62ch;font-size:14px}
+.quiz-status-actions{display:flex;gap:10px;flex-wrap:wrap}
+.quiz-status-actions .button{margin-top:0;width:auto}
+@media(max-width:720px){.student-registration-summary{align-items:flex-start;flex-direction:column}.quiz-status-actions{width:100%}.quiz-status-actions .button{flex:1}}

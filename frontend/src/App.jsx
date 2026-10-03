@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { GraduationCap, LayoutDashboard, LogIn, Menu, X } from 'lucide-react';
 import { api, getSession, saveSession } from './api/client.js';
-import { HomePage, AboutPage, QuizPage, SyllabusPage, PartnersPage, ContactPage } from './pages/PublicPages.jsx';
+import { AboutPage, QuizPage, SyllabusPage, ContactPage } from './pages/PublicPages.jsx';
+import { HomePage, PartnersPage } from './pages/ManagedPublicPages.jsx';
 import { LoginPage, SignupPage, AdminLoginPage } from './pages/AuthPages.jsx';
 import StudentPortal from './pages/StudentPortal.jsx';
 import AdminPortal from './pages/AdminPortal.jsx';
@@ -10,9 +11,11 @@ export function go(path) { window.history.pushState({},'',path); window.dispatch
 export function Logo() { return <button className="logo" onClick={()=>go('/')}><span><GraduationCap size={20}/></span><strong>danistan<small>NETWORK</small></strong></button>; }
 export default function App() {
   const [path,setPath]=useState(window.location.pathname); const [session,setSession]=useState(getSession()); const [publicData,setPublicData]=useState(null); const [menu,setMenu]=useState(false);
-  useEffect(()=>{const listener=()=>setPath(window.location.pathname);window.addEventListener('popstate',listener);api('/api/public').then(setPublicData).catch(()=>{});return()=>window.removeEventListener('popstate',listener);},[]);
+  useEffect(()=>{const listener=()=>setPath(window.location.pathname);window.addEventListener('popstate',listener);return()=>window.removeEventListener('popstate',listener);},[]);
+  useEffect(()=>{api('/api/public').then(setPublicData).catch(()=>{});},[path]);
+  useEffect(()=>{const expire=()=>{saveSession(null);setSession(null);go('/login')};window.addEventListener('danistan:session-expired',expire);return()=>window.removeEventListener('danistan:session-expired',expire)},[]);
   const login=value=>{const next=value&&!value.role?{...value,role:value.admin?'admin':'student'}:value;saveSession(next);setSession(next);go(next.role==='admin'?'/admin':'/student');};
-  const logout=()=>{saveSession(null);setSession(null);go('/');};
+  const logout=async()=>{try{if(session?.role==='student')await api('/api/auth/logout',{method:'POST'});}finally{saveSession(null);setSession(null);go('/');}};
   if(path.startsWith('/student')) return session?.role==='student'?<StudentPortal session={session} setSession={value=>{saveSession(value);setSession(value);}} onLogout={logout}/>:<LoginPage onLogin={login}/>;
   if(path==='/admin'||path.startsWith('/admin/portal')) return session?.role==='admin'?<AdminPortal onLogout={logout}/>:<AdminLoginPage onLogin={login}/>;
   if(path==='/login') return <LoginPage onLogin={login}/>;

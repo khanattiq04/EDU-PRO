@@ -21,6 +21,9 @@ export async function api(path, options = {}) {
     headers: { 'Content-Type': 'application/json', ...(session?.token ? { Authorization: `Bearer ${session.token}` } : {}), ...(options.headers || {}) }
   });
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
+  if (response.status === 401 && session?.role === 'student' && !path.startsWith('/api/auth/')) {
+    window.dispatchEvent(new Event('danistan:session-expired'));
+  }
   if (!response.ok) throw new Error(data?.error || 'Request failed.');
   return data;
 }

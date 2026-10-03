@@ -8,6 +8,7 @@
 </IfModule>
 
 <IfModule mod_headers.c>
+  Header always set X-Robots-Tag "noindex, nofollow, noarchive"
   <FilesMatch "\.(js|css|woff2?|png|jpg|jpeg|svg|webp)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>

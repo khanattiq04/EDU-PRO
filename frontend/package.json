@@ -10,10 +10,13 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "exceljs": "^4.4.0",
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"
   },
-  "devDependencies": {}
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
 }
