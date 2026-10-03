@@ -91,22 +91,19 @@ router.get('/content', async (req, res, next) => {
     const rows = await all(
       `SELECT c.id, c.month_key, c.title, c.type, c.level, c.stream, c.subject, c.chapter, c.body,
         c.file_name, c.mime_type, c.related_content_id, parent.title related_course_title,
-        c.requires_payment, c.created_at,
-        (NOT c.requires_payment OR EXISTS(
-          SELECT 1 FROM payments p WHERE p.student_id = ? AND p.status = 'Paid'
-            AND p.cycle_start IS NOT NULL AND c.month_key >= LEFT(p.cycle_start, 7)
-            AND c.month_key < LEFT(p.cycle_end, 7)
-        ) OR EXISTS(
-          SELECT 1 FROM content_unlocks u WHERE (u.student_id = ? OR u.student_id IS NULL)
-            AND u.month_key = c.month_key AND u.starts_at <= ? AND (u.expires_at IS NULL OR u.expires_at > ?)
-        )) accessible
+        c.requires_payment, c.created_at
        FROM content c LEFT JOIN content parent ON parent.id = c.related_content_id
        WHERE (c.level IS NULL OR c.level = '' OR c.level = ?)
          AND (c.stream IS NULL OR c.stream = '' OR c.stream = ?)
        ORDER BY c.month_key DESC, c.id DESC`,
-      [student.id, student.id, now(), now(), student.levelProfile.level, student.levelProfile.stream]
+      [student.levelProfile.level || '', student.levelProfile.stream || '']
     );
-    res.json(rows);
+    const payments = await all("SELECT cycle_start, cycle_end FROM payments WHERE student_id = ? AND status = 'Paid' AND cycle_start IS NOT NULL", [student.id]);
+    const unlocks = await all('SELECT month_key, starts_at, expires_at FROM content_unlocks WHERE student_id = ? OR student_id IS NULL', [student.id]);
+    const current = now();
+    const hasUnlock = key => unlocks.some(u => u.month_key === key && String(u.starts_at) <= current && (!u.expires_at || String(u.expires_at) > current));
+    const hasPayment = key => payments.some(p => key >= String(p.cycle_start).slice(0, 7) && key < String(p.cycle_end).slice(0, 7));
+    res.json(rows.map(row => ({ ...row, accessible: !row.requires_payment || hasPayment(row.month_key) || hasUnlock(row.month_key) ? 1 : 0 })));
   } catch (error) {
     next(error);
   }
