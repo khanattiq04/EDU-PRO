@@ -2,15 +2,17 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { all, one, run } from '../db.js';
 import { auth } from '../middleware/auth.js';
-import { serializeStudent } from '../services/students.js';
+import { matchesClass, serializeStudent } from '../services/students.js';
 import { now } from '../services/time.js';
 
 const router = Router();
 
-router.get('/quizzes', auth(), async (_req, res, next) => {
+router.get('/quizzes', auth(), async (req, res, next) => {
   try {
     const rows = await all("SELECT q.*, (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) question_count FROM quizzes q WHERE q.status != 'Archived' ORDER BY q.scheduled_at DESC");
-    res.json(rows);
+    if (req.session.role !== 'student') return res.json(rows);
+    const student = await serializeStudent(await one('SELECT * FROM students WHERE id = ?', [req.session.studentId]));
+    res.json(rows.filter(quiz => quiz.status !== 'Draft' && matchesClass(quiz, student.levelProfile)));
   } catch (error) {
     next(error);
   }
@@ -50,6 +52,7 @@ router.post('/attempts/start', auth('student'), async (req, res, next) => {
     if (quiz.status === 'Archived') return res.status(404).json({ error: 'Quiz not found.' });
 
     const student = await serializeStudent(await one('SELECT * FROM students WHERE id = ?', [req.session.studentId]));
+    if (!matchesClass(quiz, student.levelProfile)) return res.status(403).json({ error: 'This quiz is not available for your class.' });
     if (student.registrationStatus !== 'Active') return res.status(403).json({ error: 'A paid membership is required.' });
     let attempt = await one('SELECT * FROM attempts WHERE student_id = ? AND quiz_id = ?', [student.id, quiz.id]);
     if (attempt?.status === 'Submitted') return res.status(409).json({ error: 'This quiz has already been submitted.' });

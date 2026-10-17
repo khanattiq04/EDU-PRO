@@ -2,10 +2,12 @@ import { Router } from 'express';
 import pool, { all, one, run } from '../db.js';
 import { auth } from '../middleware/auth.js';
 import { notify } from '../services/notifications.js';
-import { serializeStudent, syncStudentStatus } from '../services/students.js';
+import { parseProfile, serializeStudent, syncStudentStatus } from '../services/students.js';
+import { assignQuizPaper } from '../services/paperAssignment.js';
 import { setSetting, settingsMap } from '../services/settings.js';
 import { addMonths, now } from '../services/time.js';
 import { configuredPlans } from './public.js';
+import { parseQuizText, SAMPLE_QUIZ_TEXT } from '../services/quizTextParser.js';
 
 const router = Router();
 router.use(auth('admin'));
@@ -39,6 +41,31 @@ router.put('/students/:id', async (req, res, next) => {
     const schoolName = b.schoolName ?? row.school_name;
     const schoolApprovalStatus = b.schoolApprovalStatus ??
       (b.schoolName !== undefined && !/^others?\s*:/i.test(String(schoolName).trim()) ? 'Approved' : row.school_approval_status);
+    if (b.level !== undefined && b.level !== row.level) {
+      const level = await one("SELECT value FROM academic_options WHERE category = 'class' AND value = ?", [String(b.level || '')]);
+      if (!level) return res.status(400).json({ error: 'Choose a valid class for this student.' });
+    }
+    const nextLevel = b.level ?? row.level;
+    if (b.stream !== undefined && b.stream !== '' && b.stream !== row.stream) {
+      const stream = await one("SELECT value FROM academic_options WHERE category IN ('stream', 'program') AND parent_value = ? AND value = ?", [nextLevel, String(b.stream)]);
+      if (!stream) return res.status(400).json({ error: `"${b.stream}" is not a stream/program of ${nextLevel}.` });
+    }
+    if (b.level !== undefined || b.stream !== undefined) {
+      const classChanged = nextLevel !== row.level;
+      const profile = {
+        ...parseProfile(row),
+        level: nextLevel,
+        stream: b.stream === undefined ? (classChanged ? null : row.stream) : (b.stream || null),
+        // Program-specific details belong to the old class, so clear them on a class change.
+        ...(classChanged ? { field: null, programName: null, year: null, semesterRange: null, status: null, nursingType: null, programDuration: null, programType: null } : {})
+      };
+      await run(
+        `UPDATE students SET level = ?, stream = ?, field = ?, program_name = ?, year = ?, semester_range = ?, status = ?,
+          nursing_type = ?, program_duration = ?, program_type = ?, level_profile_json = ?, assigned_paper = ? WHERE id = ?`,
+        [profile.level, profile.stream, profile.field, profile.programName, profile.year, profile.semesterRange, profile.status,
+         profile.nursingType, profile.programDuration, profile.programType, JSON.stringify(profile), assignQuizPaper(profile), row.id]
+      );
+    }
     await run(
       'UPDATE students SET full_name = ?, mobile = ?, email = ?, school_name = ?, school_approval_status = ?, city = ?, tehsil = ?, blocked = ? WHERE id = ?',
       [b.fullName ?? row.full_name, b.mobile ?? row.mobile, b.email ?? row.email, schoolName, schoolApprovalStatus,
@@ -205,6 +232,87 @@ router.post('/quizzes', async (req, res, next) => {
     );
     await notify(null, 'New Quiz Announcement', 'New quiz announced', `${title} has been scheduled.`);
     res.status(201).json(await one('SELECT * FROM quizzes WHERE id = ?', [inserted.insertId]));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/quizzes/import-text/sample', (_req, res) => {
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="sample-quiz.txt"');
+  res.send(SAMPLE_QUIZ_TEXT);
+});
+
+// Create a complete quiz (details + all questions) from a Notepad .txt file.
+// { text, dryRun } — dryRun returns the parsed preview without saving.
+router.post('/quizzes/import-text', async (req, res, next) => {
+  try {
+    const { text, dryRun = false } = req.body || {};
+    if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'The text file is empty.' });
+    if (text.length > 2 * 1024 * 1024) return res.status(413).json({ error: 'The text file must be smaller than 2 MB.' });
+    const parsed = parseQuizText(text);
+    const { quiz } = parsed;
+
+    if (quiz.level && quiz.level.toLowerCase() !== 'general') {
+      const classes = await all("SELECT value FROM academic_options WHERE category = 'class'");
+      const match = classes.find(c => c.value.toLowerCase() === quiz.level.toLowerCase());
+      if (!match) parsed.errors.push(`Class "${quiz.level}" does not exist. Use one of: ${classes.map(c => c.value).join(', ')}, or General.`);
+      else quiz.level = match.value;
+      if (match && quiz.stream) {
+        const streams = await all("SELECT value FROM academic_options WHERE category IN ('stream', 'program') AND parent_value = ?", [match.value]);
+        const streamMatch = streams.find(x => x.value.toLowerCase() === quiz.stream.toLowerCase());
+        if (!streamMatch) parsed.errors.push(`Stream "${quiz.stream}" does not exist for ${match.value}. Use one of: ${streams.map(x => x.value).join(', ') || '(none — remove the Stream line)'}.`);
+        else quiz.stream = streamMatch.value;
+      }
+    } else if (quiz.level) {
+      quiz.level = 'General';
+      quiz.stream = '';
+    }
+    quiz.status = quiz.scheduledAt ? 'Scheduled' : 'Draft';
+
+    if (dryRun || parsed.errors.length) {
+      return res.status(parsed.errors.length && !dryRun ? 400 : 200).json({
+        ...parsed,
+        error: parsed.errors.length ? `The file has ${parsed.errors.length} problem(s). Fix them and upload again.` : undefined
+      });
+    }
+
+    const connection = await pool.getConnection();
+    let quizId;
+    try {
+      await connection.beginTransaction();
+      const [inserted] = await connection.query(
+        `INSERT INTO quizzes (title, description, level, stream, scheduled_at, duration_minutes, fee, prize_pool,
+          prize_first, prize_second, prize_third, question_template_id, randomize_questions, status, created_at)
+         VALUES (?,?,?,?,?,?,?,?,0,0,0,NULL,?,?,?)`,
+        [quiz.title, quiz.description, quiz.level, quiz.stream || null, quiz.scheduledAt || now(), quiz.durationMinutes,
+         quiz.fee, quiz.prizePool, Number(quiz.randomizeQuestions), quiz.status, now()]
+      );
+      quizId = inserted.insertId;
+      for (const q of parsed.questions) {
+        await connection.query(
+          `INSERT INTO questions (quiz_id, subject, chapter, difficulty, language_type, question_en, question_ur,
+            option_a_en, option_a_ur, option_b_en, option_b_ur, option_c_en, option_c_ur, option_d_en, option_d_ur,
+            correct_option, explanation_en, marks, randomize, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)`,
+          [quizId, q.subject, q.chapter, q.difficulty, q.languageType, q.questionEn || q.questionUr, q.questionUr,
+           q.optionAEn, q.optionAUr, q.optionBEn, q.optionBUr, q.optionCEn, q.optionCUr, q.optionDEn, q.optionDUr,
+           q.correctOption, q.explanationEn, q.marks, now()]
+        );
+      }
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+    if (quiz.status === 'Scheduled') await notify(null, 'New Quiz Announcement', 'New quiz announced', `${quiz.title} has been scheduled.`);
+    res.status(201).json({
+      quiz: await one('SELECT q.*, (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) question_count FROM quizzes q WHERE q.id = ?', [quizId]),
+      imported: parsed.questions.length,
+      warnings: parsed.warnings
+    });
   } catch (error) {
     next(error);
   }

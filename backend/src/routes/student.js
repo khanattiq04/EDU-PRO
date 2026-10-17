@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { all, one, run } from '../db.js';
 import { auth } from '../middleware/auth.js';
 import { notify } from '../services/notifications.js';
-import { serializeStudent } from '../services/students.js';
+import { contentAccess, serializeStudent } from '../services/students.js';
 import { hashPassword, verifyPassword } from '../services/auth.js';
 import { now } from '../services/time.js';
 import { configuredPlans } from './public.js';
@@ -59,7 +59,8 @@ router.get('/dashboard', async (req, res, next) => {
     for (const result of results) {
       result.subjects = await all('SELECT subject, score, total FROM result_subjects WHERE result_id = ? ORDER BY subject', [result.id]);
     }
-    res.json({ student, plans: await configuredPlans(), quizzes, notifications, results, serverTime: now() });
+    const access = await contentAccess(student.id);
+    res.json({ student, plans: await configuredPlans(), quizzes, notifications, results, paidMonths: access.paidMonths, unlockedMonths: access.unlockedMonths, serverTime: now() });
   } catch (error) {
     next(error);
   }
@@ -94,16 +95,12 @@ router.get('/content', async (req, res, next) => {
         c.requires_payment, c.created_at
        FROM content c LEFT JOIN content parent ON parent.id = c.related_content_id
        WHERE (c.level IS NULL OR c.level = '' OR c.level = ?)
-         AND (c.stream IS NULL OR c.stream = '' OR c.stream = ?)
+         AND (c.stream IS NULL OR c.stream = '' OR c.stream = ? OR c.stream = ?)
        ORDER BY c.month_key DESC, c.id DESC`,
-      [student.levelProfile.level || '', student.levelProfile.stream || '']
+      [student.levelProfile.level || '', student.levelProfile.stream || '', student.levelProfile.programName || '']
     );
-    const payments = await all("SELECT cycle_start, cycle_end FROM payments WHERE student_id = ? AND status = 'Paid' AND cycle_start IS NOT NULL", [student.id]);
-    const unlocks = await all('SELECT month_key, starts_at, expires_at FROM content_unlocks WHERE student_id = ? OR student_id IS NULL', [student.id]);
-    const current = now();
-    const hasUnlock = key => unlocks.some(u => u.month_key === key && String(u.starts_at) <= current && (!u.expires_at || String(u.expires_at) > current));
-    const hasPayment = key => payments.some(p => key >= String(p.cycle_start).slice(0, 7) && key < String(p.cycle_end).slice(0, 7));
-    res.json(rows.map(row => ({ ...row, accessible: !row.requires_payment || hasPayment(row.month_key) || hasUnlock(row.month_key) ? 1 : 0 })));
+    const access = await contentAccess(student.id);
+    res.json(rows.map(row => ({ ...row, accessible: access.canOpen(row) ? 1 : 0 })));
   } catch (error) {
     next(error);
   }
@@ -112,23 +109,15 @@ router.get('/content', async (req, res, next) => {
 router.get('/content/:id/file', async (req, res, next) => {
   try {
     const row = await one(
-      `SELECT c.id, c.title, c.file_name, c.mime_type, c.requires_payment FROM content c
+      `SELECT c.id, c.title, c.month_key, c.file_name, c.mime_type, c.requires_payment FROM content c
        JOIN students s ON s.id = ? AND (c.level IS NULL OR c.level = '' OR c.level = s.level)
-         AND (c.stream IS NULL OR c.stream = '' OR c.stream = s.stream)
+         AND (c.stream IS NULL OR c.stream = '' OR c.stream = s.stream OR c.stream = s.program_name)
        WHERE c.id = ?`,
       [req.session.studentId, Number(req.params.id)]
     );
     if (!row) return res.status(404).json({ error: 'Content file not found.' });
-    const access = await one(
-      `SELECT EXISTS(SELECT 1 FROM payments p WHERE p.student_id = ? AND p.status = 'Paid'
-          AND p.cycle_start IS NOT NULL AND
-            (SELECT month_key FROM content WHERE id = ?) >= LEFT(p.cycle_start, 7)
-            AND (SELECT month_key FROM content WHERE id = ?) < LEFT(p.cycle_end, 7)) paid,
-        EXISTS(SELECT 1 FROM content_unlocks WHERE (student_id = ? OR student_id IS NULL) AND starts_at <= ?
-          AND (expires_at IS NULL OR expires_at > ?) AND month_key = (SELECT month_key FROM content WHERE id = ?)) unlocked`,
-      [req.session.studentId, row.id, row.id, req.session.studentId, now(), now(), row.id]
-    );
-    if (row.requires_payment && !access.paid && !access.unlocked) return res.status(403).json({ error: 'This content requires paid access or an active admin unlock.' });
+    const access = await contentAccess(req.session.studentId);
+    if (!access.canOpen(row)) return res.status(403).json({ error: 'This month is not included in your plan. Renew or ask admin for an unlock.' });
     const file = await one('SELECT file_data FROM content WHERE id = ?', [row.id]);
     if (!file?.file_data) return res.status(404).json({ error: 'No uploaded file is available for this content.' });
     res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
