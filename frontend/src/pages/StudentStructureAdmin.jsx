@@ -6,7 +6,7 @@ function Panel({ title, children }) {
   return <section className="admin-panel"><div className="section-row"><h2>{title}</h2></div>{children}</section>;
 }
 
-export function StudentsAdmin({ students, refresh, flash }) {
+export function StudentsAdmin({ students, academicOptions = [], refresh, flash }) {
   const [editing, setEditing] = useState(null);
   const pending = students.filter(student => student.schoolApprovalStatus === 'Pending');
   const toggle = async student => {
@@ -19,8 +19,8 @@ export function StudentsAdmin({ students, refresh, flash }) {
   const save = async event => {
     event.preventDefault();
     try {
-      const { fullName, mobile, email, schoolName, city, tehsil } = editing;
-      await api(`/api/admin/students/${editing.id}`, { method: 'PUT', body: JSON.stringify({ fullName, mobile, email, schoolName, city, tehsil }) });
+      const { fullName, mobile, email, schoolName, city, tehsil, level, stream } = editing;
+      await api(`/api/admin/students/${editing.id}`, { method: 'PUT', body: JSON.stringify({ fullName, mobile, email, schoolName, city, tehsil, level, stream: stream || '' }) });
       setEditing(null);
       refresh();
       flash('Student details saved.');
@@ -52,12 +52,12 @@ export function StudentsAdmin({ students, refresh, flash }) {
           <div><strong>{student.fullName}</strong><small>{student.email} · {student.mobile} · {student.registrationNumber}</small><small>{student.schoolName} {student.schoolApprovalStatus==='Pending'?'· School entry pending':''}</small></div>
           <span>{student.levelProfile.level} {student.levelProfile.stream&&`· ${student.levelProfile.stream}`}</span>
           <span className={student.blocked?'status blocked':'status active'}>{student.blocked?'Blocked':student.registrationStatus}</span>
-          <div className="student-actions"><button className="button secondary" onClick={()=>setEditing(student)}>Edit</button><button className="button secondary" onClick={()=>toggle(student)}>{student.blocked?'Unblock':'Block'}</button>{student.schoolApprovalStatus==='Pending'&&<button className="button primary" onClick={()=>approve(student.id)}>Approve school</button>}</div>
+          <div className="student-actions"><button className="button secondary" onClick={()=>setEditing({ ...student, level: student.levelProfile.level || '', stream: student.levelProfile.stream || '' })}>Edit</button><button className="button secondary" onClick={()=>toggle(student)}>{student.blocked?'Unblock':'Block'}</button>{student.schoolApprovalStatus==='Pending'&&<button className="button primary" onClick={()=>approve(student.id)}>Approve school</button>}</div>
         </div>)}
       </div>
     </Panel>
     {pending.length>0&&<Panel title={`Pending “Others” school entries · ${pending.length}`}><div className="table-list">{pending.map(student=><div className="table-row" key={student.id}><div><strong>{student.schoolName}</strong><small>{student.fullName} · {student.registrationNumber}</small></div><button className="button primary" onClick={()=>approve(student.id)}>Approve <Check size={15}/></button></div>)}</div></Panel>}
-    {editing&&<div className="admin-modal-backdrop"><form className="admin-modal admin-form" onSubmit={save}><div className="section-row"><h2>Edit student</h2><button type="button" className="button secondary" onClick={()=>setEditing(null)}>Cancel</button></div>{[['fullName','Full name'],['mobile','Mobile'],['email','Email'],['schoolName','School / college'],['city','City'],['tehsil','Tehsil']].map(([key,label])=><label key={key}>{label}<input required={key==='fullName'} type={key==='email'?'email':'text'} value={editing[key]||''} onChange={event=>setEditing({...editing,[key]:event.target.value})}/></label>)}<button className="button primary">Save student</button></form></div>}
+    {editing&&<div className="admin-modal-backdrop"><form className="admin-modal admin-form" onSubmit={save}><div className="section-row"><h2>Edit student</h2><button type="button" className="button secondary" onClick={()=>setEditing(null)}>Cancel</button></div>{[['fullName','Full name'],['mobile','Mobile'],['email','Email'],['schoolName','School / college'],['city','City'],['tehsil','Tehsil']].map(([key,label])=><label key={key}>{label}<input required={key==='fullName'} type={key==='email'?'email':'text'} value={editing[key]||''} onChange={event=>setEditing({...editing,[key]:event.target.value})}/></label>)}<label>Class<select required value={editing.level} onChange={event => setEditing({ ...editing, level: event.target.value, stream: '' })}>{!academicOptions.some(o => o.category === 'class' && o.value === editing.level) && <option value={editing.level}>{editing.level || 'Select class'}</option>}{academicOptions.filter(o => o.category === 'class').map(o => <option key={o.id} value={o.value}>{o.value}</option>)}</select></label>{(() => { const streams = academicOptions.filter(o => (o.category === 'stream' || o.category === 'program') && o.parent_value === editing.level); return streams.length > 0 && <label>Stream / program<select value={editing.stream} onChange={event => setEditing({ ...editing, stream: event.target.value })}><option value="">Not set</option>{editing.stream && !streams.some(o => o.value === editing.stream) && <option value={editing.stream}>{editing.stream}</option>}{streams.map(o => <option key={o.id} value={o.value}>{o.value}</option>)}</select></label>; })()}{editing.level !== editing.levelProfile.level && <small>Changing the class moves this student to {editing.level}'s quizzes, notes and syllabus.</small>}<button className="button primary">Save student</button></form></div>}
   </div>;
 }
 
