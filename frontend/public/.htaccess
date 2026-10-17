@@ -7,8 +7,19 @@
   RewriteRule . /index.html [L]
 </IfModule>
 
+# ---------------------------------------------------------------------------
+# SEARCH ENGINE BLOCKING (staging / test domains)
+# Every domain is hidden from Google EXCEPT the live domain named below.
+# When you launch, make sure the line below has your real domain - nothing
+# else needs to change. Until the site runs on that domain, Google is told
+# "noindex" on every page.
+# ---------------------------------------------------------------------------
+<IfModule mod_setenvif.c>
+  SetEnvIfNoCase Host "^(www\.)?danistan\.network$" ALLOW_INDEXING
+</IfModule>
+
 <IfModule mod_headers.c>
-  Header always set X-Robots-Tag "noindex, nofollow, noarchive"
+  Header always set X-Robots-Tag "noindex, nofollow, noarchive" env=!ALLOW_INDEXING
   <FilesMatch "\.(js|css|woff2?|png|jpg|jpeg|svg|webp)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
