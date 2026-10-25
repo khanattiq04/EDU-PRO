@@ -4,7 +4,8 @@ import { one, run } from '../db.js';
 import { buildLevelProfile, generateRegistrationNumber } from '../services/registration.js';
 import { assignQuizPaper } from '../services/paperAssignment.js';
 import { encryptSensitive } from '../services/crypto.js';
-import { createToken, hashPassword, verifyPassword } from '../services/auth.js';
+import { createToken, hashPasswordAsync, verifyPasswordAsync } from '../services/auth.js';
+import { loginGuard } from '../middleware/protect.js';
 import { notify } from '../services/notifications.js';
 import { serializeStudent } from '../services/students.js';
 import { now } from '../services/time.js';
@@ -34,7 +35,7 @@ router.post('/auth/signup', async (req, res, next) => {
         level, stream, field, program_name, year, semester_range, status, nursing_type, program_duration, program_type,
         level_profile_json, assigned_paper, registration_number, school_approval_status, created_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [fullName, fatherName || null, mobile, email, gender, city, tehsil || null, schoolName, encryptSensitive(cnic), hashPassword(password),
+      [fullName, fatherName || null, mobile, email, gender, city, tehsil || null, schoolName, encryptSensitive(cnic), await hashPasswordAsync(password),
        structured.level, structured.stream, structured.field, structured.programName, structured.year, structured.semesterRange,
        structured.status, structured.nursingType, structured.programDuration, structured.programType,
        JSON.stringify(structured), assignedPaper, registrationNumber, schoolApprovalStatus, now()]
@@ -50,11 +51,18 @@ router.post('/auth/signup', async (req, res, next) => {
   }
 });
 
-router.post('/auth/login', async (req, res, next) => {
+router.post('/auth/login', loginGuard('student'), async (req, res, next) => {
   try {
     const { login, password } = req.body || {};
-    const row = await one('SELECT * FROM students WHERE lower(email) = lower(?) OR mobile = ? OR registration_number = ? LIMIT 1', [login, login, login]);
-    if (!row || !verifyPassword(password, row.password_hash)) return res.status(401).json({ error: 'Invalid login or password.' });
+    const value = String(login || '').trim();
+    if (!value || !password) return res.status(400).json({ error: 'Enter your login and password.' });
+    // email column uses a case-insensitive collation, so plain = keeps the index usable.
+    const row = await one('SELECT * FROM students WHERE email = ? OR mobile = ? OR registration_number = ? LIMIT 1', [value, value, value]);
+    if (!row || !(await verifyPasswordAsync(password, row.password_hash))) {
+      req.loginFailed?.();
+      return res.status(401).json({ error: 'Invalid login or password.' });
+    }
+    req.loginSucceeded?.();
     if (row.blocked) return res.status(403).json({ error: 'This account has been blocked.' });
     const sessionId = crypto.randomUUID();
     await run(
@@ -67,11 +75,15 @@ router.post('/auth/login', async (req, res, next) => {
   }
 });
 
-router.post('/auth/admin', (req, res) => {
+router.post('/auth/admin', loginGuard('admin'), (req, res) => {
   const { email, password } = req.body || {};
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@danistan.network';
   const adminPassword = process.env.ADMIN_PASSWORD || 'Admin123!';
-  if (email !== adminEmail || password !== adminPassword) return res.status(401).json({ error: 'Invalid admin credentials.' });
+  if (email !== adminEmail || password !== adminPassword) {
+    req.loginFailed?.();
+    return res.status(401).json({ error: 'Invalid admin credentials.' });
+  }
+  req.loginSucceeded?.();
   res.json({ token: createToken({ role: 'admin' }, 12), role: 'admin', admin: { email: adminEmail, name: 'Administrator' } });
 });
 

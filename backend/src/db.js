@@ -7,8 +7,15 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'danistan_network',
   waitForConnections: true,
-  connectionLimit: Number(process.env.DB_POOL_SIZE || 10),
-  queueLimit: 0,
+  // 20 connections per server process; raise DB_POOL_SIZE on bigger hosting plans
+  // (keep it below the MySQL max_connections limit across all processes).
+  connectionLimit: Number(process.env.DB_POOL_SIZE || 20),
+  maxIdle: Number(process.env.DB_POOL_SIZE || 20),
+  idleTimeout: 60000,
+  queueLimit: Number(process.env.DB_QUEUE_LIMIT || 5000),
+  connectTimeout: 10000,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000,
   charset: 'utf8mb4_unicode_ci',
   dateStrings: true,
   decimalNumbers: true
@@ -202,6 +209,7 @@ export async function ensureQuizFeatures() {
   await addColumn('quizzes', 'prize_first', 'INT UNSIGNED NOT NULL DEFAULT 0');
   await addColumn('quizzes', 'prize_second', 'INT UNSIGNED NOT NULL DEFAULT 0');
   await addColumn('quizzes', 'prize_third', 'INT UNSIGNED NOT NULL DEFAULT 0');
+  await addColumn('quizzes', 'closes_at', 'VARCHAR(40) NULL');
   await addColumn('questions', 'randomize', 'TINYINT(1) NOT NULL DEFAULT 1');
   await addColumn('attempts', 'disconnected_at', 'VARCHAR(40) NULL');
   await addColumn('attempts', 'last_seen_at', 'VARCHAR(40) NULL');

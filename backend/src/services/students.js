@@ -18,16 +18,43 @@ export function paymentFor(studentId) {
   return one("SELECT * FROM payments WHERE student_id = ? AND status = 'Paid' ORDER BY cycle_end DESC LIMIT 1", [studentId]);
 }
 
-export async function syncStudentStatus(studentId) {
+export async function syncStudentStatus(studentId, currentStatus) {
   const payment = await paymentFor(studentId);
   const status = payment && new Date(payment.cycle_end) >= new Date() ? 'Active' : 'Disable';
-  await run('UPDATE students SET registration_status = ? WHERE id = ?', [status, studentId]);
+  // Only write when the status actually changes - this runs on almost every request.
+  if (status !== currentStatus) await run('UPDATE students SET registration_status = ? WHERE id = ? AND registration_status <> ?', [status, studentId, status]);
   return { status, payment };
 }
 
 export async function serializeStudent(row) {
   if (!row) return null;
-  const access = await syncStudentStatus(row.id);
+  return toStudentJson(row, await syncStudentStatus(row.id, row.registration_status));
+}
+
+// Batch version for admin lists: 2 queries in total instead of 2 per student.
+export async function serializeStudents(rows) {
+  if (!rows.length) return [];
+  const latest = await all(
+    `SELECT p.* FROM payments p
+     JOIN (SELECT student_id, MAX(cycle_end) cycle_end FROM payments WHERE status = 'Paid' GROUP BY student_id) m
+       ON m.student_id = p.student_id AND m.cycle_end = p.cycle_end AND p.status = 'Paid'`
+  );
+  const byStudent = new Map(latest.map(p => [p.student_id, p]));
+  const nowDate = new Date();
+  const changed = { Active: [], Disable: [] };
+  const out = rows.map(row => {
+    const payment = byStudent.get(row.id) || null;
+    const status = payment && new Date(payment.cycle_end) >= nowDate ? 'Active' : 'Disable';
+    if (status !== row.registration_status) changed[status].push(row.id);
+    return toStudentJson(row, { status, payment });
+  });
+  for (const [status, ids] of Object.entries(changed)) {
+    if (ids.length) await run(`UPDATE students SET registration_status = ? WHERE id IN (${ids.map(() => '?').join(',')})`, [status, ...ids]);
+  }
+  return out;
+}
+
+function toStudentJson(row, access) {
   return {
     id: row.id,
     fullName: row.full_name,

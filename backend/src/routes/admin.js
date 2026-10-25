@@ -2,15 +2,23 @@ import { Router } from 'express';
 import pool, { all, one, run } from '../db.js';
 import { auth } from '../middleware/auth.js';
 import { notify } from '../services/notifications.js';
-import { parseProfile, serializeStudent, syncStudentStatus } from '../services/students.js';
+import { parseProfile, serializeStudent, serializeStudents, syncStudentStatus } from '../services/students.js';
 import { assignQuizPaper } from '../services/paperAssignment.js';
 import { setSetting, settingsMap } from '../services/settings.js';
 import { addMonths, now } from '../services/time.js';
 import { configuredPlans } from './public.js';
+import { quizWindow } from '../services/quizTiming.js';
+import { invalidate } from '../services/cache.js';
+import { forgetContentFile } from '../services/fileCache.js';
 import { parseQuizText, SAMPLE_QUIZ_TEXT } from '../services/quizTextParser.js';
 
 const router = Router();
 router.use(auth('admin'));
+// Any admin change clears cached public data (homepage, settings, options) right away.
+router.use((req, res, next) => {
+  if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400) invalidate(); });
+  next();
+});
 
 router.get('/stats', async (_req, res, next) => {
   try {
@@ -27,7 +35,7 @@ router.get('/stats', async (_req, res, next) => {
 router.get('/students', async (_req, res, next) => {
   try {
     const rows = await all('SELECT * FROM students ORDER BY created_at DESC');
-    res.json(await Promise.all(rows.map(serializeStudent)));
+    res.json(await serializeStudents(rows));
   } catch (error) {
     next(error);
   }
@@ -223,13 +231,15 @@ router.delete('/question-templates/:id', async (req, res, next) => {
 
 router.post('/quizzes', async (req, res, next) => {
   try {
-    const { title, description, level, stream, scheduledAt, durationMinutes = 45, fee = 200, prizePool = 0, prizeFirst = 0, prizeSecond = 0, prizeThird = 0, questionTemplateId = null, randomizeQuestions = true, status = 'Scheduled' } = req.body || {};
+    const { title, description, level, stream, scheduledAt, durationMinutes = 45, fee = 200, prizePool = 0, prizeFirst = 0, prizeSecond = 0, prizeThird = 0, questionTemplateId = null, randomizeQuestions = true, status = 'Scheduled', closesAt = null } = req.body || {};
     if (!title || !level || !scheduledAt) return res.status(400).json({ error: 'Title, level and schedule are required.' });
+    if (closesAt && new Date(closesAt) <= new Date(scheduledAt)) return res.status(400).json({ error: '"Available until" must be after the start time.' });
     if (![durationMinutes, fee, prizePool, prizeFirst, prizeSecond, prizeThird].every(value => Number.isFinite(Number(value)) && Number(value) >= 0)) return res.status(400).json({ error: 'Duration, fees, and prize amounts must be non-negative numbers.' });
     const inserted = await run(
       'INSERT INTO quizzes (title, description, level, stream, scheduled_at, duration_minutes, fee, prize_pool, prize_first, prize_second, prize_third, question_template_id, randomize_questions, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
       [title, description || null, level, stream || null, scheduledAt, Number(durationMinutes), Number(fee), Number(prizePool), Number(prizeFirst), Number(prizeSecond), Number(prizeThird), questionTemplateId || null, Number(Boolean(randomizeQuestions)), status, now()]
     );
+    if (closesAt) await run('UPDATE quizzes SET closes_at = ? WHERE id = ?', [closesAt, inserted.insertId]);
     await notify(null, 'New Quiz Announcement', 'New quiz announced', `${title} has been scheduled.`);
     res.status(201).json(await one('SELECT * FROM quizzes WHERE id = ?', [inserted.insertId]));
   } catch (error) {
@@ -289,6 +299,7 @@ router.post('/quizzes/import-text', async (req, res, next) => {
          quiz.fee, quiz.prizePool, Number(quiz.randomizeQuestions), quiz.status, now()]
       );
       quizId = inserted.insertId;
+      if (quiz.closesAt) await connection.query('UPDATE quizzes SET closes_at = ? WHERE id = ?', [quiz.closesAt, quizId]);
       for (const q of parsed.questions) {
         await connection.query(
           `INSERT INTO questions (quiz_id, subject, chapter, difficulty, language_type, question_en, question_ur,
@@ -329,6 +340,11 @@ router.put('/quizzes/:id', async (req, res, next) => {
        b.scheduledAt ?? quiz.scheduled_at, b.durationMinutes ?? quiz.duration_minutes, b.fee ?? quiz.fee,
        b.prizePool ?? quiz.prize_pool, b.status ?? quiz.status, quiz.id]
     );
+    if (b.closesAt !== undefined) {
+      const start = b.scheduledAt ?? quiz.scheduled_at;
+      if (b.closesAt && new Date(b.closesAt) <= new Date(start)) return res.status(400).json({ error: '"Available until" must be after the start time.' });
+      await run('UPDATE quizzes SET closes_at = ? WHERE id = ?', [b.closesAt || null, quiz.id]);
+    }
     if (['prizeFirst', 'prizeSecond', 'prizeThird', 'questionTemplateId', 'randomizeQuestions'].some(key => b[key] !== undefined)) {
       await run(
         'UPDATE quizzes SET prize_first = ?, prize_second = ?, prize_third = ?, question_template_id = ?, randomize_questions = ? WHERE id = ?',
@@ -603,13 +619,13 @@ router.get('/retries', async (_req, res, next) => {
     );
     const pending = await all(
       `SELECT rr.*, a.student_id, a.quiz_id, s.full_name, s.registration_number, q.title,
-        q.scheduled_at, q.duration_minutes
+        q.scheduled_at, q.duration_minutes, q.closes_at
        FROM retry_requests rr JOIN attempts a ON a.id = rr.attempt_id
        JOIN students s ON s.id = a.student_id JOIN quizzes q ON q.id = a.quiz_id
        WHERE rr.status = 'Pending' ORDER BY rr.requested_at`
     );
     res.json(pending.filter(item =>
-      Date.now() > new Date(item.scheduled_at).getTime() + Number(item.duration_minutes) * 60000
+      Date.now() > quizWindow(item).closesAt
     ));
   } catch (error) {
     next(error);
@@ -790,6 +806,7 @@ router.post('/content', async (req, res, next) => {
 router.delete('/content/:id', async (req, res, next) => {
   try {
     await run('DELETE FROM content WHERE id = ?', [Number(req.params.id)]);
+    await forgetContentFile(Number(req.params.id));
     res.status(204).end();
   } catch (error) {
     next(error);

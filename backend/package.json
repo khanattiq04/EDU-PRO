@@ -10,7 +10,8 @@
     "start": "node --env-file-if-exists=.env src/server.js",
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
     "seed:demo": "node --env-file-if-exists=.env scripts/seed-demo-student.js",
-    "seed:onemonth": "node --env-file-if-exists=.env scripts/seed-one-month-student.js"
+    "seed:onemonth": "node --env-file-if-exists=.env scripts/seed-one-month-student.js",
+    "seed:samples": "node --env-file-if-exists=.env scripts/load-sample-data.js"
   },
   "dependencies": {
     "cors": "^2.8.6",

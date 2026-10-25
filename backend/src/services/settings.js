@@ -1,4 +1,5 @@
 import { all, one, run } from '../db.js';
+import { cached, invalidate } from './cache.js';
 
 const defaults = {
   site_name: 'Danistan Network',
@@ -21,15 +22,19 @@ export async function ensureDefaultSettings() {
 }
 
 export async function getSetting(key, fallback = '') {
-  const row = await one('SELECT value FROM settings WHERE `key` = ?', [key]);
-  return row?.value ?? fallback;
+  const map = await settingsMap();
+  return map[key] ?? fallback;
 }
 
 export async function setSetting(key, value) {
   await run('INSERT INTO settings (`key`, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value)', [key, String(value)]);
+  invalidate();
 }
 
-export async function settingsMap() {
-  const rows = await all('SELECT `key`, value FROM settings');
-  return Object.fromEntries(rows.map(row => [row.key, row.value]));
+// Cached for 30 s; changes made in the admin panel clear the cache immediately.
+export function settingsMap() {
+  return cached('settings', 30000, async () => {
+    const rows = await all('SELECT `key`, value FROM settings');
+    return Object.fromEntries(rows.map(row => [row.key, row.value]));
+  });
 }

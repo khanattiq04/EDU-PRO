@@ -14,7 +14,7 @@
 //   D) Golgi body
 //   Answer: B
 //
-// Optional header lines: Description, Chapter, Fee, Prize Pool, Difficulty,
+// Optional header lines: Description, Chapter, Available Until, Fee, Prize Pool, Difficulty,
 // Randomize (yes/no). Optional per-question lines (after the options):
 // Explanation, Subject, Chapter, Difficulty, Marks. Urdu can be added after a
 // " | " on the question or option line, e.g. "A) Nucleus | مرکزہ".
@@ -32,6 +32,7 @@ const HEADER_KEYS = {
   'prize pool': 'prizePool', prize: 'prizePool',
   difficulty: 'difficulty',
   randomize: 'randomize', shuffle: 'randomize',
+  'available until': 'closes', 'open until': 'closes', 'closes': 'closes', 'close date': 'closes', 'end date': 'closes',
   language: 'language'
 };
 
@@ -185,6 +186,7 @@ export function parseQuizText(rawText) {
     subject: header.subject || null,
     chapter: header.chapter || null,
     scheduledAt: header.date ? parseDate(header.date) : null,
+    closesAt: header.closes ? parseDate(header.closes) : null,
     durationMinutes: header.duration ? Number.parseInt(header.duration, 10) : 45,
     fee: header.fee !== undefined ? Number(String(header.fee).replace(/[^\d.]/g, '')) : 0,
     prizePool: header.prizePool !== undefined ? Number(String(header.prizePool).replace(/[^\d.]/g, '')) : 0,
@@ -195,6 +197,8 @@ export function parseQuizText(rawText) {
   if (!quiz.title) errors.push('Add a "Quiz Title:" line at the top of the file.');
   if (!quiz.level) errors.push('Add a "Class:" line (e.g. Class: 10th) so the quiz reaches the right students.');
   if (header.date && !quiz.scheduledAt) errors.push(`Date "${header.date}" is not valid. Use YYYY-MM-DD HH:MM, e.g. 2026-10-25 10:00.`);
+  if (header.closes && !quiz.closesAt) errors.push(`Available Until "${header.closes}" is not valid. Use YYYY-MM-DD HH:MM.`);
+  if (quiz.closesAt && quiz.scheduledAt && quiz.closesAt <= quiz.scheduledAt) errors.push('Available Until must be after the Date.');
   if (!header.date) warnings.push('No "Date:" line — the quiz will be saved as a Draft (hidden from students) until you schedule it in Quiz management.');
   if (!Number.isFinite(quiz.durationMinutes) || quiz.durationMinutes < 1) errors.push('Duration must be a number of minutes, e.g. Duration: 45.');
   if (!Number.isFinite(quiz.fee) || quiz.fee < 0) errors.push('Fee must be a number.');
@@ -248,6 +252,7 @@ Stream: Biology
 Subject: Biology
 Chapter: Cell Biology
 Date: 2026-10-25 10:00
+Available Until: 2026-10-31 22:00
 Duration: 45
 Description: Monthly test for 10th class Biology students.
 
