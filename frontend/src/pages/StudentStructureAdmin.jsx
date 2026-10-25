@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Check, Download, Plus, Trash2 } from 'lucide-react';
 import { api } from '../api/client.js';
+import PagedList from './PagedList.jsx';
 
 function Panel({ title, children }) {
   return <section className="admin-panel"><div className="section-row"><h2>{title}</h2></div>{children}</section>;
@@ -8,6 +9,12 @@ function Panel({ title, children }) {
 
 export function StudentsAdmin({ students, academicOptions = [], refresh, flash }) {
   const [editing, setEditing] = useState(null);
+  const [query, setQuery] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const term = query.trim().toLowerCase();
+  const studentClasses = [...new Set(students.map(s => s.levelProfile.level).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const shown = students.filter(s => (!classFilter || s.levelProfile.level === classFilter) &&
+    (!term || `${s.fullName} ${s.email || ''} ${s.mobile || ''} ${s.registrationNumber} ${s.schoolName || ''}`.toLowerCase().includes(term)));
   const pending = students.filter(student => student.schoolApprovalStatus === 'Pending');
   const toggle = async student => {
     try {
@@ -47,13 +54,18 @@ export function StudentsAdmin({ students, academicOptions = [], refresh, flash }
   return <div className="student-admin-stack">
     <Panel title={`Student management · ${students.length} accounts`}>
       <button className="button secondary directory-export" onClick={exportCsv}><Download size={15}/> Export contact directory (CSV)</button>
+      <div className="form-grid" style={{ margin: '12px 0' }}>
+        <label>Search students<input value={query} placeholder="Name, email, mobile, registration no. or school" onChange={e => setQuery(e.target.value)} /></label>
+        <label>Class<select value={classFilter} onChange={e => setClassFilter(e.target.value)}><option value="">All classes</option>{studentClasses.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
+      </div>
+      {(query || classFilter) && <small style={{ display: 'block', marginBottom: 8 }}>{shown.length} of {students.length} students match</small>}
       <div className="data-table"><div className="table-header"><span>Student</span><span>Pathway</span><span>Status</span><span>Action</span></div>
-        {students.map(student => <div className="table-row" key={student.id}>
+        {<PagedList items={shown} render={student => <div className="table-row" key={student.id}>
           <div><strong>{student.fullName}</strong><small>{student.email} · {student.mobile} · {student.registrationNumber}</small><small>{student.schoolName} {student.schoolApprovalStatus==='Pending'?'· School entry pending':''}</small></div>
           <span>{student.levelProfile.level} {student.levelProfile.stream&&`· ${student.levelProfile.stream}`}</span>
           <span className={student.blocked?'status blocked':'status active'}>{student.blocked?'Blocked':student.registrationStatus}</span>
           <div className="student-actions"><button className="button secondary" onClick={()=>setEditing({ ...student, level: student.levelProfile.level || '', stream: student.levelProfile.stream || '' })}>Edit</button><button className="button secondary" onClick={()=>toggle(student)}>{student.blocked?'Unblock':'Block'}</button>{student.schoolApprovalStatus==='Pending'&&<button className="button primary" onClick={()=>approve(student.id)}>Approve school</button>}</div>
-        </div>)}
+        </div>}/>}
       </div>
     </Panel>
     {pending.length>0&&<Panel title={`Pending “Others” school entries · ${pending.length}`}><div className="table-list">{pending.map(student=><div className="table-row" key={student.id}><div><strong>{student.schoolName}</strong><small>{student.fullName} · {student.registrationNumber}</small></div><button className="button primary" onClick={()=>approve(student.id)}>Approve <Check size={15}/></button></div>)}</div></Panel>}

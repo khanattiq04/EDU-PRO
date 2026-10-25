@@ -10,3 +10,26 @@
 .quiz-status-actions{display:flex;gap:10px;flex-wrap:wrap}
 .quiz-status-actions .button{margin-top:0;width:auto}
 @media(max-width:720px){.student-registration-summary{align-items:flex-start;flex-direction:column}.quiz-status-actions{width:100%}.quiz-status-actions .button{flex:1}}
+
+/* Student identity: sidebar, header and dashboard card */
+.student-chip .student-chip-class{color:var(--app-lime,#b8d64a);font-weight:700;font-size:11px}
+.portal-identity{display:inline-flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border:1px solid var(--app-line,#dfe5eb);border-radius:999px;background:#fff;font-size:12px;color:var(--app-ink,#172536)}
+.portal-identity b{font-weight:700;letter-spacing:.02em}
+.portal-identity i{font-style:normal;font-weight:700;background:var(--app-navy,#112239);color:#fff;padding:4px 10px;border-radius:999px}
+.portal-status{font-size:12px;font-weight:700;padding:6px 12px;border-radius:999px;background:#f6e7e4;color:#a23c27;white-space:nowrap}
+.portal-status.active{background:#e3f6ef;color:#0b7a55}
+.student-identity-card{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;background:#fff;border:1px solid var(--app-line,#dfe5eb);border-radius:12px;overflow:hidden}
+.student-identity-card>div{display:grid;gap:6px;padding:14px 18px;border-right:1px solid var(--app-line,#dfe5eb);min-width:0}
+.student-identity-card>div:last-child{border-right:0}
+.student-identity-card strong{font-family:'Space Grotesk',Arial,sans-serif;font-size:16px;color:var(--app-navy,#112239);overflow-wrap:anywhere}
+.student-identity-card .sic-active{color:#0b7a55}
+.student-identity-card .sic-inactive{color:#a23c27}
+.profile-academic{margin-bottom:20px}
+.profile-academic input[readonly]{background:#f3f5f7;color:var(--app-ink,#172536);font-weight:700;cursor:default}
+.profile-academic small{display:block;margin-top:8px;color:var(--app-muted,#687586)}
+@media (max-width:900px){
+  .student-identity-card{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .student-identity-card>div{border-right:0;border-bottom:1px solid var(--app-line,#dfe5eb)}
+  .portal-identity b{display:none}
+}
+@media (min-width:901px){.portal-head .portal-actions{flex-direction:row;align-items:center;gap:10px}}

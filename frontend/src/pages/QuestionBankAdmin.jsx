@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { Check, Download, FileText, Trash2, Upload, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Check, Download, FileText, Pencil, Trash2, Upload, X } from 'lucide-react';
+import './quiz-modal.css';
 import { api, getSession } from '../api/client.js';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -250,6 +251,63 @@ export function QuestionBankList({ quizzes, questions, refresh, flash }) {
         {!visible.length && <div className="empty-state">No questions match this filter.</div>}
       </div>
     </section>
+  );
+}
+
+export function QuizViewModal({ quiz, onClose, onEdit }) {
+  const [questions, setQuestions] = useState(null);
+  const [error, setError] = useState('');
+  const closeRef = React.useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    api(`/api/admin/questions?quizId=${quiz.id}`).then(rows => setQuestions([...rows].sort((a, b) => a.id - b.id))).catch(e => setError(e.message));
+    const onKey = event => { if (event.key === 'Escape') closeRef.current(); };
+    window.addEventListener('keydown', onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = previous; };
+  }, [quiz.id]);
+  const start = new Date(quiz.scheduled_at);
+  const end = quiz.closes_at ? new Date(quiz.closes_at) : new Date(start.getTime() + Number(quiz.duration_minutes) * 60000);
+  const now = Date.now();
+  const state = quiz.status !== 'Scheduled' ? quiz.status : now < start ? 'Upcoming' : now < end ? 'Live now' : 'Closed';
+  const totalMarks = (questions || []).reduce((sum, q) => sum + Number(q.marks || 1), 0);
+  return (
+    <div className="qm-backdrop" role="dialog" aria-modal="true" aria-label={quiz.title} onClick={event => event.target === event.currentTarget && onClose()}>
+      <div className="qm-shell qm-exam">
+        <header className="qm-head">
+          <div className="qm-head-title">
+            <span className="qm-eyebrow">{quiz.level === 'General' ? 'All classes' : quiz.level}{quiz.stream ? ` · ${quiz.stream}` : ''}</span>
+            <h2>{quiz.title}</h2>
+          </div>
+          <div className="qm-head-stats"><span className="qm-pill">{state}</span></div>
+          <button className="qm-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        </header>
+        <div className="qm-body">
+          <div className="qm-facts">
+            <div><small>Opens</small><strong>{start.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</strong></div>
+            <div><small>Closes</small><strong>{end.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</strong></div>
+            <div><small>Time per student</small><strong>{quiz.duration_minutes} min</strong></div>
+            <div><small>Questions / marks</small><strong>{questions ? `${questions.length} / ${totalMarks}` : '…'}</strong></div>
+          </div>
+          {quiz.description && <p className="qm-desc">{quiz.description}</p>}
+          <small style={{ display: 'block', marginBottom: 8 }}>
+            Visible to: {quiz.level === 'General' ? 'every class' : `${quiz.level} students${quiz.stream ? ` (${quiz.stream} stream)` : ' (all streams)'}`} ·
+            Order: {quiz.randomize_questions ? 'randomized per student' : 'fixed'} · Fee: Rs. {quiz.fee} · Prize pool: Rs. {quiz.prize_pool}
+          </small>
+          {error && <div className="form-error">{error}</div>}
+          {quiz.question_template_id && <div className="admin-notice" style={{ position: 'static' }}>Questions are drawn from the bank by a distribution template, so each student gets a random set.</div>}
+          <div className="table-list">
+            {questions?.map((q, i) => <QuestionCard key={q.id} q={q} index={i} />)}
+            {questions && !questions.length && <div className="empty-state">This quiz has no questions yet. Add them in Question bank.</div>}
+          </div>
+        </div>
+        <div className="qm-foot" style={{ padding: '14px 22px', borderTop: '1px solid var(--line, #e5e8ec)', marginTop: 0 }}>
+          <button className="button secondary" onClick={onClose}>Close</button>
+          <button className="button primary" onClick={onEdit}><Pencil size={15} /> Edit quiz</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

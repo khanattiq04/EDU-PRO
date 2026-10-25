@@ -1,0 +1,45 @@
+/* Admin › Quiz management › Saved quizzes panel */
+.ql-panel{display:flex;flex-direction:column;gap:14px;min-width:0}
+.ql-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ql-head h2{margin:0;font-size:18px}
+.ql-head small{color:var(--muted,#6b7688);font-size:12px}
+.ql-class{display:grid;gap:4px;min-width:190px;flex:1;max-width:260px}
+.ql-class span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#6b7688)}
+.ql-class select{width:100%;padding:9px 12px;border:1px solid var(--line,#e5e8ec);border-radius:10px;background:#fff;font-weight:600;font-size:13px}
+.ql-tabs{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:2px}
+.ql-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid var(--line,#e5e8ec);background:#fff;font-size:12px;font-weight:600;color:var(--muted,#6b7688);cursor:pointer}
+.ql-tab b{font-size:11px;min-width:18px;padding:1px 6px;border-radius:999px;background:#eef1f4;color:var(--ink,#162235)}
+.ql-tab:hover{border-color:#c9d2dc}
+.ql-tab-on{background:var(--navy,#112239);border-color:var(--navy,#112239);color:#fff}
+.ql-tab-on b{background:rgba(255,255,255,.2);color:#fff}
+.ql-search{display:flex;align-items:center;gap:8px;border:1px solid var(--line,#e5e8ec);border-radius:10px;padding:0 12px;background:#fff;color:var(--muted,#6b7688)}
+.ql-search input{flex:1;border:0;outline:0;padding:10px 0;font-size:13px;background:transparent;margin:0}
+.ql-list{display:grid;gap:12px;max-height:980px;overflow:auto;padding-right:2px}
+.ql-card{border:1px solid var(--line,#e5e8ec);border-radius:14px;padding:16px;background:#fff;display:grid;gap:10px;transition:border-color .15s,box-shadow .15s}
+.ql-card:hover{border-color:#cfd8e2;box-shadow:0 6px 18px rgba(20,32,52,.06)}
+.ql-editing{border-color:var(--coral,#e96b50);box-shadow:0 0 0 3px rgba(233,107,80,.12)}
+.ql-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.ql-card-top h3{margin:0;font-size:15px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ql-badge{flex:none;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.ql-badge i{width:7px;height:7px;border-radius:50%;background:currentColor;animation:ql-blink 1.4s ease-in-out infinite}
+@keyframes ql-blink{50%{opacity:.3}}
+.ql-live-now{background:#e3f6ef;color:#0b7a55}
+.ql-upcoming{background:#e8f0fd;color:#2457b8}
+.ql-closed{background:#eef1f4;color:#5b6676}
+.ql-draft{background:#fbf1dd;color:#9a6b12}
+.ql-archived{background:#f6e7e4;color:#a23c27}
+.ql-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ql-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:7px;background:#f3f5f7;font-size:12px;color:#3d4a5c}
+.ql-chip-class{background:var(--navy,#112239);color:#fff;font-weight:700}
+.ql-dates{display:flex;align-items:center;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted,#6b7688)}
+.ql-dates b{color:var(--ink,#162235);font-weight:600;margin-right:3px}
+.ql-warn{font-size:12px;color:#9a6b12;background:#fdf6e7;border-radius:8px;padding:6px 10px}
+.ql-actions{display:flex;flex-wrap:wrap;gap:8px;padding-top:10px;border-top:1px solid #eef1f4}
+.ql-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--line,#e5e8ec);background:#fff;font-size:12px;font-weight:700;color:var(--ink,#162235);cursor:pointer;margin:0;width:auto}
+.ql-btn:hover{border-color:#b9c4d0;background:#f8fafb}
+.ql-btn-primary{background:var(--coral,#e96b50);border-color:var(--coral,#e96b50);color:#fff}
+.ql-btn-primary:hover{background:#d95d43;border-color:#d95d43}
+.ql-btn-ghost{margin-left:auto;border-color:transparent;color:#a23c27;background:transparent}
+.ql-btn-ghost:hover{background:#fbeeeb;border-color:transparent}
+.ql-empty{display:grid;justify-items:center;gap:4px;padding:34px 12px;border:1px dashed var(--line,#e5e8ec);border-radius:14px;color:var(--muted,#6b7688);text-align:center}
+.ql-empty strong{color:var(--ink,#162235)}
